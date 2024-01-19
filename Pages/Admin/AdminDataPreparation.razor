@@ -1,0 +1,542 @@
+﻿@page "/data-preparation"
+@using TransferBase.Application.CustomModels;
+@using TransferBase.Application.Services.FixData;
+@using TransferBase.Application.Services.General;
+@using TransferBase.Components;
+
+<PageTitle>Home page</PageTitle>
+<AuthorizeView Roles="@CustomRoles.Admin">
+    <Authorized>
+        <section class="container py-5 my-5 text-left">
+            <article class="p-5 my-5 shadow rounded text-left bg-white">
+                <h1 class="mb-5 fw-bold">
+                    Data Preparation Page
+                </h1>
+                <button class="btn btn-primary" @onclick=ButtonClicked>Fill Transfers Table</button>
+            </article>
+        </section>
+    </Authorized>
+    <NotAuthorized>
+        <section class="container py-5 my-5">
+            <article class="my-5 text-center">
+                <p>
+                    Sorry, you do not have the proper permissions to access this page.
+                </p>
+            </article>
+        </section>
+    </NotAuthorized>
+</AuthorizeView>
+<TransferBase.Components.AlertMessage @ref="_alertMessage" />
+
+
+@code{
+
+    [Inject]
+    public ILogger Logger { get; set; } = default!;
+    [Inject]
+    public TransfersService TransfersService { get; set; } = default!;
+    [Inject]
+    public PlayersService PlayersService { get; set; } = default!;
+    [Inject]
+    public ClubsService ClubsService { get; set; } = default!;
+    [Inject]
+    public PlayerSkillsService PlayerSkillsService { get; set; } = default!;
+    [Inject]
+    public ValuesService ValuesService { get; set; } = default!;
+    [Inject]
+    public NationalTeamsService NationalTeamsService { get; set; } = default!;
+    [Inject] 
+    public GamesService GamesService { get; set; } = default!;
+    [Inject]
+    public CoachesService CoachesService { get; set; } = default!;
+    [Inject]
+    public AppearancesService AppearancesService { get; set; } = default!;
+    [Inject]
+    public IDbContextFactory<DatabaseContext>? Factory { get; set; }
+
+    public List<PlayerSkill>? PlayerSkills = new List<PlayerSkill>();
+
+    public bool IsprocedureExecuted = true;
+    private AlertMessage? _alertMessage;
+
+    protected override void OnInitialized()
+    {
+        Logger.Information($"Initialized at {DateTime.Now}");
+        //using var db = Factory.CreateDbContext();
+        //var developers = db.PlayerSkills.ToList();
+        //PlayerSkills =  PlayerSkillsService.AllSkills();
+    }
+
+    private void ButtonClicked()
+    {
+        using var db = Factory!.CreateDbContext();
+
+        if (IsprocedureExecuted)
+        {
+            _alertMessage!.ShowAlert("Procedure already completed.", Severity.Error);
+            return;
+        }
+
+        var transferPrices = TransfersService.GetTransferPrices();
+
+        if (transferPrices != null)
+        {
+            foreach (var transfer in transferPrices)
+            {
+                int i = 0;
+                // check each transfer how many times exists in transferprice table
+                var transfersOfPlayerList = TransfersService.GetTransferPricesOfPlayer(transfer.PlayerName!);
+
+                if (transfersOfPlayerList.Count > 1)
+                {
+                    var playerFirstTransfer = transfersOfPlayerList[i];
+
+                    foreach (var transferOfPlayer in transfersOfPlayerList)
+                    {
+                        if (playerFirstTransfer != null)
+                        {
+                            Transfer realTransfer = TransfersService.SearchForSameTransferDetails(playerFirstTransfer!.PlayerName!,
+                                                                                                  playerFirstTransfer!.ClubInvolved!,
+                                                                                                  playerFirstTransfer!.ClubName!);
+
+                            if (realTransfer != null && realTransfer.TransferPriceFuture == 0)
+                            {
+                                var playerFutureTransfer = transfersOfPlayerList[i + 1];
+
+                                if (playerFutureTransfer != null) {
+                                    TransfersService.UpdateTransfer(realTransfer, playerFutureTransfer.Fee);
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
+        }
+
+
+        var transfers = TransfersService.GetTransfers().ToList();
+
+        if (transfers != null)
+        {
+            foreach (var transfer in transfers)
+            {
+                var playerId = PlayersService.GetPlayerIdByName(transfer.PlayerName!);
+                var clubId = ClubsService.GetClubIdByName(transfer.ClubFrom!);
+                var appearances = AppearancesService.GetPlayerAppearances(playerId, transfer.Season);
+                int cleanSheets = 0;
+
+                cleanSheets = AppearancesService.GetCleanSheets(playerId, clubId, transfer.Season - 1);
+                TransfersService.UpdateTransfer(transfer, cleanSheets);
+
+                if (appearances != null && appearances.Any())
+                {
+                    foreach (var appearance in appearances)
+                    {
+                        cleanSheets += AppearancesService.GetCleanSheets(playerId, clubId, transfer.Season);
+                    }
+
+                    TransfersService.UpdateTransfer(transfer, cleanSheets);
+                }
+            }
+        }
+
+
+        // fill the label values
+        var transfersResultsDefs = TransfersService.GetTransfersByPosition("Defender");
+        var finalResultsDefs = transfersResultsDefs.Where(a => a.AverageDefenderSkills > 0 && a.TotalMinutesPlayed > 0).ToList();
+
+        foreach (var transfer in finalResultsDefs)
+        {
+            double transferSuccess = 0;
+
+            if (transfer.AverageDefenderSkills >= 15)
+                transferSuccess += 35;
+            else
+                transferSuccess += 2.33 * transfer.AverageDefenderSkills;
+
+            if (transfer.TotalMinutesPlayed >= 2500)
+                transferSuccess += 35;
+            else
+                transferSuccess += 0.014 * transfer.TotalMinutesPlayed;
+
+            if (transfer.CleanSheets >= 9)
+                transferSuccess += 30;
+            else
+                transferSuccess += 3.33 * transfer.CleanSheets;
+
+            if (transfer.TransferPriceFuture > 0 && transfer.TransferPriceFuture / 2 > transfer.CurrentMarketValue)
+                if (transferSuccess >= 95)
+                    transferSuccess = 100;
+                else
+                    transferSuccess += 5; // like bonus
+
+            // penalty points
+            if (transfer.TotalMinutesPlayed <= 500)
+            {
+                transferSuccess -= (500 - transfer.TotalMinutesPlayed) * 0.10;
+            }
+
+            if (transfer.GoalsConceded > 40)
+            {
+                transferSuccess -= (transfer.GoalsConceded - 40) * 0.50;
+            }
+
+            if (transferSuccess < 0)
+                transferSuccess = 0;
+
+            transferSuccess = Math.Round(transferSuccess, 2);
+
+            TransfersService.UpdateTransferSuccess(transfer, transferSuccess);
+        }
+
+
+
+
+        // fill the label values
+        var transfersResultsMids = TransfersService.GetTransfersByPosition("Midfield");
+        var finalResultsMids = transfersResultsMids.Where(a => a.Assists >= 0 && a.TotalMinutesPlayed > 0 && a.AverageMidfielderSkills > 0).ToList();
+
+        foreach (var transfer in finalResultsMids)
+        {
+            double transferSuccess = 0;
+
+            if (transfer.Assists >= 5)
+                transferSuccess += 36;
+            else
+                transferSuccess += 7.2 * transfer.Assists;
+
+            if (transfer.TotalMinutesPlayed >= 2500)
+                transferSuccess += 33;
+            else
+                transferSuccess += 0.0132 * transfer.TotalMinutesPlayed;
+
+            if (transfer.AverageMidfielderSkills >= 15)
+                transferSuccess += 31;
+            else
+                transferSuccess += 2.06 * transfer.AverageMidfielderSkills;
+
+            if (transfer.TransferPriceFuture > 0 && transfer.TransferPriceFuture / 2 > transfer.CurrentMarketValue)
+                if (transferSuccess > 96)
+                    transferSuccess = 100;
+                else
+                    transferSuccess += 5; // like bonus
+
+            if (transfer.TotalMinutesPlayed <= 500)
+            {
+                transferSuccess -= (500 - transfer.TotalMinutesPlayed) * 0.10;
+            }
+
+            if (transferSuccess < 0)
+                transferSuccess = 0;
+            
+            transferSuccess = Math.Round(transferSuccess, 2);
+
+            TransfersService.UpdateTransferSuccess(transfer, transferSuccess);
+        }
+
+
+
+        // fill the label values
+        var transfersResultsAttackers = TransfersService.GetTransfersByPosition("Attack");
+        var finalResultsAttackers = transfersResultsAttackers.Where(a => a.Goals >= 0 && a.TotalMinutesPlayed > 0 && a.AverageAttackerSkills > 0).ToList();
+
+        foreach (var transfer in finalResultsAttackers)
+        {
+            double transferSuccess = 0;
+
+            if (transfer.Goals >= 10)
+                transferSuccess += 36;
+            else
+                transferSuccess += 3.6 * transfer.Goals;
+
+            if (transfer.TotalMinutesPlayed >= 2500)
+                transferSuccess += 31;
+            else
+                transferSuccess += 0.0124 * transfer.TotalMinutesPlayed;
+
+            if (transfer.AverageAttackerSkills >= 14)
+                transferSuccess += 33;
+            else
+                transferSuccess += 2.35 * transfer.AverageAttackerSkills;
+
+            if (transfer.TransferPriceFuture > 0 && transfer.TransferPriceFuture / 2 > transfer.CurrentMarketValue)
+                if (transferSuccess > 96)
+                    transferSuccess = 100;
+                else
+                    transferSuccess += 5; // like bonus
+
+
+            if (transfer.TotalMinutesPlayed <= 500)
+            {
+                transferSuccess -= (500 - transfer.TotalMinutesPlayed) * 0.10;
+            }
+
+            if (transferSuccess < 0)
+                transferSuccess = 0;
+
+            transferSuccess = Math.Round(transferSuccess, 2);
+
+            TransfersService.UpdateTransferSuccess(transfer, transferSuccess);
+        }
+
+        var transfersResultsGKs = TransfersService.GetTransfersByPosition("Goalkeeper");
+        var finalResults = transfersResultsGKs.Where(a => a.CleanSheets >= 0 && a.TotalMinutesPlayed > 0 && a.KeeperSaves > 0).ToList();
+
+        foreach (var transfer in finalResults)
+        {
+            double transferSuccess = 0;
+
+            if (transfer.CleanSheets >= 9)
+                transferSuccess += 35;
+            else
+                transferSuccess += 3.88 * transfer.CleanSheets;
+
+            if (transfer.TotalMinutesPlayed >= 2500)
+                transferSuccess += 33;
+            else
+                transferSuccess += 0.0132 * transfer.TotalMinutesPlayed;
+
+            if (transfer.KeeperSaves >= 55)
+                transferSuccess += 32;
+            else
+                transferSuccess += 0.58 * transfer.KeeperSaves;
+
+            if (transfer.TransferPriceFuture > 0 && transfer.TransferPriceFuture / 2 > transfer.CurrentMarketValue)
+                if (transferSuccess > 96)
+                    transferSuccess = 100;
+                else
+                    transferSuccess += 5; // like bonus
+
+            if (transfer.TotalMinutesPlayed <= 500)
+            {
+                transferSuccess -= (500 - transfer.TotalMinutesPlayed) * 0.10;
+            }
+
+            if (transfer.GoalsConceded > 40)
+            {
+                transferSuccess -= (transfer.GoalsConceded - 40) * 0.50;
+            }
+
+            if (transferSuccess < 0)
+                transferSuccess = 0;
+
+            transferSuccess = Math.Round(transferSuccess, 2);
+
+            TransfersService.UpdateTransferSuccess(transfer, transferSuccess);
+        }
+
+        var results = TransfersService.FetchTransfers();
+
+        List<PlayerStatisticsMod> playerStatsPerSeason = new();
+        List<TransferMod> transfersModList = new();
+        foreach (var item in results)
+        {
+            playerStatsPerSeason = results.Where(a => a.PlayerId == item.PlayerId && !a.isChecked).ToList();
+            int counter = 1;
+            for (int i=0; i < playerStatsPerSeason.Count - 1; i++)
+            {
+                playerStatsPerSeason[i].isChecked = true;
+                playerStatsPerSeason[i+1].isChecked = true;
+                if (playerStatsPerSeason[i].PlayerClubId != playerStatsPerSeason[i + 1].PlayerClubId)
+                {
+                    transfersModList.Add(new TransferMod
+                        {
+                            Player = PlayersService.GetPlayerById(playerStatsPerSeason[i].PlayerId),
+                            PlayerSkill = PlayerSkillsService.GetPlayerSkillByUid(PlayersService.GetPlayerById(playerStatsPerSeason[i].PlayerId).UID, playerStatsPerSeason[i + 1].Season),
+                            ClubFromId = playerStatsPerSeason[i].PlayerClubId,
+                            ClubToId = playerStatsPerSeason[i + 1].PlayerClubId,
+                            PreviousSeasonGoals = playerStatsPerSeason[i].Goals,
+                            PreviousSeasonAssists = playerStatsPerSeason[i].Assists,
+                            PreviousSeasonMinutesPlayed = playerStatsPerSeason[i].MinutesPlayed,
+                            PreviousSeasonCleanSheets = AppearancesService.GetCleanSheets(playerStatsPerSeason[i].PlayerId, playerStatsPerSeason[i].PlayerClubId, playerStatsPerSeason[i].Season),
+                            PreviousSeasonYellowCards = playerStatsPerSeason[i].YellowCards,
+                            PreviousSeasonRedCards = playerStatsPerSeason[i].RedCards,
+                            CurrentSeasonGoals = playerStatsPerSeason[i + 1].Goals,
+                            CurrentSeasonAssists = playerStatsPerSeason[i + 1].Assists,
+                            CurrentSeasonMinutesPlayed = playerStatsPerSeason[i + 1].MinutesPlayed,
+                            CurrentSeasonCleanSheets = AppearancesService.GetCleanSheets(playerStatsPerSeason[i].PlayerId, playerStatsPerSeason[i+1].PlayerClubId, playerStatsPerSeason[i+1].Season),
+                            Season = playerStatsPerSeason[i + 1].Season,
+                            TeamsChanged = counter
+                    });
+                    counter++;
+                }
+            }
+        }
+
+
+        foreach (var transferMod in transfersModList)
+        {
+            var transfer = TransfersService.GetTransfer(transferMod!.Player!.Name!, transferMod.Season);
+
+            if (transfer != null)
+            {
+                transfer.PreviousSeasonGoals = transferMod.PreviousSeasonGoals;
+                transfer.PreviousSeasonAssists = transferMod.PreviousSeasonAssists;
+                db.Transfers.Update(transfer);
+                db.SaveChanges();
+            }
+        }
+        
+        var goalkeepersList = transfersModList.Where(a => a.Player!.SubPosition! == "Goalkeeper");
+
+        foreach (var transferMod2 in goalkeepersList)
+        {
+            var appearances = AppearancesService.GetPlayerAppearances(transferMod2!.Player!.Id, transferMod2.Season - 1);
+            int keeperSaves = 0;
+
+            if (appearances != null && appearances.Any())
+            {
+                foreach (var appearance in appearances)
+                {
+                    keeperSaves += GamesService.GetKeeperSaves(appearance.GameId!, appearance.ClubId);
+                }
+
+                var transfer = TransfersService.GetTransfer(transferMod2!.Player!.Name!, transferMod2.Season);
+
+                if (transfer != null)
+                {
+                    transfer.PreviousSeasonKeeperSaves = keeperSaves;
+                    db.Transfers.Update(transfer);
+                    db.SaveChanges();
+                }
+            }
+        }
+
+        foreach (var transferMod2 in transfersModList)
+        {
+            var appearances = AppearancesService.GetPlayerAppearances(transferMod2!.Player!.Id, transferMod2.Season - 1);
+            int goalsConceded = 0;
+
+            if (appearances != null && appearances.Any())
+            {
+                foreach (var appearance in appearances)
+                {
+                    goalsConceded += GamesService.GetGoalsConceded(appearance.GameId!, appearance.ClubId);
+                }
+
+                var transfer = TransfersService.GetTransfer(transferMod2!.Player!.Name!, transferMod2.Season);
+
+                if (transfer != null)
+                {
+                    transfer.PreviousSeasonGoalsConceded = goalsConceded;
+                    db.Transfers.Update(transfer);
+                    db.SaveChanges();
+                }
+            }
+        }
+
+
+        foreach (var transferMod in transfersModList)
+        {
+            if (transferMod.Player != null)
+            {
+                Club clubTo = ClubsService.GetClubByClubId(transferMod.ClubToId);
+                Transfer transfer = new();
+                transfer.PlayerName = transferMod.Player.Name;
+                transfer.PlayerPosition = transferMod.Player.SubPosition;
+                transfer.ClubFrom = ClubsService.GetClubNameByClubId(transferMod.ClubFromId);
+                transfer.ClubTo = (clubTo != null) ? clubTo.Name : "";
+                transfer.ClubToCompetition = ClubsService.GetClubCompetition(transferMod.ClubToId);
+                transfer.ClubToPlayerValuations = ClubsService.GetClubPlayerValuation(transferMod.ClubToId, transferMod.Season);
+                transfer.ClubToAveragePlayerValuations = ClubsService.GetClubAveragePlayerValuation(transferMod.ClubToId, transferMod.Season);
+                transfer.ClubFromAveragePlayerValuations = ClubsService.GetClubAveragePlayerValuation(transferMod.ClubFromId, transferMod.Season);
+                transfer.IsPlayedInBiggerCompetitions = TransfersService.ComparePlayerCompetitions(transferMod.Player.Id, transferMod.ClubToId, transferMod.Season);
+                transfer.IsPlayedInSimilarCompetitions = TransfersService.ComparePlayerSimilarCompetitions(transferMod.Player.Id, transferMod.ClubToId, transferMod.Season);
+                transfer.Season = transferMod.Season;
+                transfer.PlayerNationality = transferMod.Player.CountryOfBirth;
+                transfer.IsPlayedInEurope = true;
+                transfer.NationalTeamWorldRanking = NationalTeamsService.GetNationalTeamRanking(transferMod.Player.CountryOfBirth!);
+                transfer.HighestMarketValue = ValuesService.GetHighestMarketValueOfPlayer(transferMod.Player.Id, transferMod.Season);
+                transfer.CurrentMarketValue = ValuesService.GetMarketValueOfPlayer(transferMod.Player.Id, transferMod.Season);
+                transfer.TeamsChangedDuringCareer = transferMod.TeamsChanged;
+                transfer.Goals = transferMod.CurrentSeasonGoals;
+                transfer.Assists = transferMod.CurrentSeasonAssists;
+                transfer.TotalMinutesPlayed = transferMod.CurrentSeasonMinutesPlayed;
+                transfer.CleanSheets = transferMod.CurrentSeasonCleanSheets;
+                transfer.PreviousSeasonAssists = transferMod.PreviousSeasonAssists;
+                transfer.PreviousSeasonGoals = transferMod.PreviousSeasonGoals;
+                transfer.PreviousSeasonTotalMinutesPlayed = transferMod.PreviousSeasonMinutesPlayed;
+                transfer.PreviousSeasonCleanSheets = transferMod.PreviousSeasonCleanSheets; 
+                transfer.NumberOfLocalsInNewTeam = (clubTo != null) ? clubTo.SquatSize - clubTo.ForeignersNumber : -1;
+                transfer.NumberOfPlayersInNewTeamSamePosition = ClubsService.GetClubPlayersInSamePosition(transferMod.ClubToId, transferMod.Season, transferMod.Player.SubPosition!);
+                transfer.MaximumMarketValueOfPlayerNewTeamSamePosition = ClubsService.GetTeamBestPlayerInSpecificPosition(transferMod.ClubToId, transferMod.Season, transferMod.Player.SubPosition!);
+                transfer.AverageMarketValueOfPlayerNewTeamSamePosition = ClubsService.GetClubAveragePlayerValuationByPosition(transferMod.ClubToId, transferMod.Season, transferMod.Player.SubPosition!);
+                transfer.NumberOfPlayersInNewTeamSameCountry = ClubsService.GetClubPlayersSameNationality(transferMod.ClubToId, transferMod.Season, transferMod.Player.CountryOfBirth!);
+                transfer.AverageAttendanceOfNewTeam = GamesService.GetAverageAttendance(transferMod.ClubToId, transferMod.Season);
+                transfer.CoachNationality = CoachesService.GetCoachNationality(ClubsService.GetClubCoachId(transferMod.ClubToId));
+                transfer.CoachAverageTimeInTeam = CoachesService.GetCoachAverageTime(ClubsService.GetClubCoachId(transferMod.ClubToId));
+
+                if (transferMod.PlayerSkill != null)
+                {
+                    transfer.Age = (transferMod.Season <= 2018) ? CalculateAge(transferMod.Season, transferMod.PlayerSkill) : transferMod.PlayerSkill.Age;
+                    transfer.AppearancesWithNationalTeam = transferMod.PlayerSkill.Caps;
+                    transfer.InjuryRate = transferMod.PlayerSkill.RcInjury;
+                    transfer.Acceleration = transferMod.PlayerSkill.Acceleration;
+                    transfer.AerialAbility = transferMod.PlayerSkill.AerialAbility;
+                    transfer.Aggression = transferMod.PlayerSkill.Aggression;
+                    transfer.Agility = transferMod.PlayerSkill.Agility;
+                    transfer.Anticipation = transferMod.PlayerSkill.Anticipation;
+                    transfer.Balance = transferMod.PlayerSkill.Balance;
+                    transfer.Bravery = transferMod.PlayerSkill.Bravery;
+                    transfer.CommandOfArea = transferMod.PlayerSkill.CommandOfArea;
+                    transfer.Communication = transferMod.PlayerSkill.Communication;
+                    transfer.Composure = transferMod.PlayerSkill.Composure;
+                    transfer.Concentration = transferMod.PlayerSkill.Concentration;
+                    transfer.Corners = transferMod.PlayerSkill.Corners;
+                    transfer.Crossing = transferMod.PlayerSkill.Crossing;
+                    transfer.Decisions = transferMod.PlayerSkill.Decisions;
+                    transfer.Determination = transferMod.PlayerSkill.Determination;
+                    transfer.Dribbling = transferMod.PlayerSkill.Dribbling;
+                    transfer.Eccentricity = transferMod.PlayerSkill.Eccentricity;
+                    transfer.Finishing = transferMod.PlayerSkill.Finishing;
+                    transfer.FirstTouch = transferMod.PlayerSkill.FirstTouch;
+                    transfer.Flair = transferMod.PlayerSkill.Flair;
+                    transfer.FreeKickTaking = transferMod.PlayerSkill.FreeKickTaking;
+                    transfer.Handling = transferMod.PlayerSkill.Handling;
+                    transfer.Heading = transferMod.PlayerSkill.Heading;
+                    transfer.JumpingReach = transferMod.PlayerSkill.JumpingReach;
+                    transfer.Kicking = transferMod.PlayerSkill.Kicking;
+                    transfer.Leadership = transferMod.PlayerSkill.Leadership;
+                    transfer.LongShots = transferMod.PlayerSkill.LongShots;
+                    transfer.LongThrows = transferMod.PlayerSkill.LongThrows;
+                    transfer.Marking = transferMod.PlayerSkill.Marking;
+                    transfer.NaturalFitness = transferMod.PlayerSkill.NaturalFitness;
+                    transfer.OffTheBall = transferMod.PlayerSkill.OffTheBall;
+                    transfer.OneOnOnes = transferMod.PlayerSkill.OneOnOnes;
+                    transfer.Pace = transferMod.PlayerSkill.Pace;
+                    transfer.Passing = transferMod.PlayerSkill.Passing;
+                    transfer.PenaltyTaking = transferMod.PlayerSkill.PenaltyTaking;
+                    transfer.Positioning = transferMod.PlayerSkill.Positioning;
+                    transfer.Punching = transferMod.PlayerSkill.Punching;
+                    transfer.Reflexes = transferMod.PlayerSkill.Reflexes;
+                    transfer.RuchingOut = transferMod.PlayerSkill.RuchingOut;
+                    transfer.Stamina = transferMod.PlayerSkill.Stamina;
+                    transfer.Strength = transferMod.PlayerSkill.Strength;
+                    transfer.Tackling = transferMod.PlayerSkill.Tackling;
+                    transfer.Teamwork = transferMod.PlayerSkill.Teamwork;
+                    transfer.Technique = transferMod.PlayerSkill.Technique;
+                    transfer.Throwing = transferMod.PlayerSkill.Throwing;
+                    transfer.Vision = transferMod.PlayerSkill.Vision;
+                    transfer.WorkRate = transferMod.PlayerSkill.WorkRate;
+                    transfer.Adaptation = transferMod.PlayerSkill.Adaptation;
+                    transfer.Ambition = transferMod.PlayerSkill.Ambition;
+                    transfer.Consistency = transferMod.PlayerSkill.Consistency;
+                    transfer.ResistantToStress = transferMod.PlayerSkill.ResistantToStress;
+                    transfer.Professional = transferMod.PlayerSkill.Professional;
+                }
+
+                db.Transfers.Add(transfer);
+                db.SaveChanges();
+            }
+        }
+    }
+
+    private int CalculateAge(int season, PlayerSkill playerSkill)
+    {
+        int difference = playerSkill.Season - season;
+
+        return playerSkill.Age - difference;
+    }
+
+}

@@ -1,0 +1,62 @@
+﻿@using TransferBase.Application.CustomModels;
+@using TransferBase.Application.Services.General;
+
+@if (Elements.Count() > 0)
+{
+    <MudTable Items="@Elements" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@_loading" LoadingProgressColor="Color.Info" Height="350px" Class="py-2;" Style="overflow:scroll;">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">Player Statistics</MudText>
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Club Name</MudTh>
+            <MudTh>Goals</MudTh>
+            <MudTh>Assists</MudTh>
+            <MudTh>Yellow Cards</MudTh>
+            <MudTh>Red Cards</MudTh>
+            <MudTh>Minutes Played</MudTh>
+            <MudTh>Season</MudTh>
+
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Club Name">@context.ClubName</MudTd>
+            <MudTd DataLabel="Goals">@context.Goals</MudTd>
+            <MudTd DataLabel="Assists">@context.Assists</MudTd>
+            <MudTd DataLabel="Yellow Cards">@context.YellowCards</MudTd>
+            <MudTd DataLabel="Red Cards">@context.RedCards</MudTd>
+            <MudTd DataLabel="Minutes Played">@context.MinutesPlayed</MudTd>
+            <MudTd DataLabel="Season">@context.Season</MudTd>
+
+        </RowTemplate>
+    </MudTable>
+}
+else
+{
+    <h4>No data found</h4>
+}
+
+@code {
+    private bool dense = false;
+    private bool hover = true;
+    private bool striped = false;
+    private bool bordered = false;
+    private bool fixedheader = true;
+    private bool _loading = true;
+
+    [Parameter]
+    public int playerId { get; set; }
+
+    [Inject]
+    public PlayersService PlayersService { get; set; } = default!;
+
+    private IEnumerable<PlayerStatisticsMod> Elements = new List<PlayerStatisticsMod>();
+
+
+    protected override void OnInitialized()
+    {
+        if (playerId == -1)
+            return;
+
+        Elements = PlayersService.GetPlayerStatisticsPerTeam(playerId);
+        _loading = false;
+    }
+}

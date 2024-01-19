@@ -1,0 +1,98 @@
+﻿@using TransferBase.Application.CustomModels;
+@using TransferBase.Application.Services.General;
+
+@if (model != null)
+{
+    <MudGrid>
+        <MudItem xs="12" sm="12" md="12">
+            <MudText Typo="Typo.h6" GutterBottom="true">Player Information</MudText>
+        </MudItem>
+        <MudItem xs="12" sm="12" md="6">
+            <MudPaper Width="300px" Square="true">
+                <MudList Clickable="true">
+                    <MudListItem>Name: @model.Name</MudListItem>
+                    <MudDivider />
+                    <MudListItem>Age: @model.Age</MudListItem>
+                    <MudDivider />
+                    <MudListItem>Nationality: @model.Nationality</MudListItem>
+                    <MudDivider />
+                    <MudListItem>Current Team: @model.CurrentTeam</MudListItem>
+                    <MudDivider />
+                    <MudListItem>Position: @model.Position</MudListItem>   
+                    <MudDivider />
+                    <MudListItem>Best Role: @model.BestRole</MudListItem>
+                </MudList>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="12" md="6">
+            <MudPaper Width="300px" Square="true">
+                <MudList Clickable="true">
+                    <MudListItem>Foot: @model.PreferedFoot</MudListItem>
+                    <MudDivider />
+                    <MudListItem>Left Foot: @model.LeftFoot</MudListItem>
+                    <MudDivider />
+                    <MudListItem>Right Foot: @model.RightFoot</MudListItem>
+                    <MudDivider />
+                    <MudListItem>Height: @model.Height</MudListItem>
+                    <MudDivider />
+                    <MudListItem>Weight: @model.Weight</MudListItem>
+                    <MudDivider />
+                    <MudListItem>Wage (Approximate): @model.PossibleWage</MudListItem>
+                </MudList>
+            </MudPaper>
+        </MudItem>
+
+    </MudGrid>
+}
+else
+{
+    <h4>No data found</h4>
+}
+
+@code{
+    [Parameter]
+    public int playerId { get; set; }
+
+    [Inject]
+    public PlayerSkillsService PlayerSkillsService { get; set; } = default!;
+    [Inject]
+    public PlayersService PlayersService { get; set; } = default!;
+
+    PlayerInformationMod? model { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (playerId == -1)
+            return;
+
+        Player player = PlayersService.GetPlayerById(playerId);
+
+        if (player != null)
+        {
+            int uid = player.UID;
+            PlayerSkill playerSkill = PlayerSkillsService!.GetPlayerSkillByUid(uid, 2021)!;
+
+            if (playerSkill != null)
+            {
+                model = new()
+                {
+                    Name = player.Name,
+                    Age = playerSkill.Age,
+                    Nationality = player.CountryOfBirth,
+                    CurrentTeam = player.CurrentClubName,
+                    Position = player.Position,
+                    BestRole = playerSkill.BestRole,
+                    Style = playerSkill.Style,
+                    PreferedFoot = playerSkill.PreferredFoot,
+                    RightFoot = playerSkill.RightFoot,
+                    LeftFoot = playerSkill.LeftFoot,
+                    Height = playerSkill.Height,
+                    Weight = playerSkill.Weight,
+                    PossibleWage = playerSkill.Wage
+
+                };
+            }
+
+        }
+    }
+}

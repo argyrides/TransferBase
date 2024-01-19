@@ -1,0 +1,33 @@
+﻿<nav class="navbar container">
+	<div class="container-fluid">
+		<AuthorizeView>
+			<Authorized>
+				<MudAppBar Elevation="1">
+					<NavLink ActiveClass="navbar-brand" href="/">
+						<ApplicationLogo />
+					</NavLink>
+@*					<MudButton Href="/dashboard" Color="Color.Inherit" Variant="Variant.Text">Dashboard</MudButton>
+*@					<MudButton Href="/predictions" Color="Color.Inherit" Variant="Variant.Text">Predictions Tool</MudButton>
+					<MudSpacer />
+					<MudMenu FullWidth="true" Color="Color.Inherit" Variant="Variant.Text" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter">
+						<ActivatorContent>
+							<MudChip Icon="@Icons.Material.Filled.Person" Color="Color.Primary">ACCOUNT</MudChip>
+						</ActivatorContent>
+						<ChildContent>
+							<MudMenuItem Href="/profile/edit">Profile</MudMenuItem>
+							<MudMenuItem Href="data-preparation">Prepare Data</MudMenuItem>
+							<MudMenuItem Href="/logout">Sign Out</MudMenuItem>
+							<MudText Align="Align.Center">@user.Name</MudText>
+						</ChildContent>
+					</MudMenu>
+				</MudAppBar>
+			</Authorized>
+			<NotAuthorized>
+				<div class="">
+					<a href="/login" class="me-3">Login</a>
+					<a href="/register" class="btn btn-primary">Register</a>
+				</div>
+			</NotAuthorized>
+		</AuthorizeView>
+	</div>
+</nav>

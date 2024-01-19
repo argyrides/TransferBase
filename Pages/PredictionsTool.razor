@@ -1,0 +1,137 @@
+﻿@page "/predictions"
+@attribute [Authorize]
+
+<PageTitle>Predictions Tool</PageTitle>
+
+<section class="container py-2 my-2 text-left">
+    <h1 class="mb-3 fw-bold titles-font-size">
+        Predictions Tool
+    </h1>
+    <MudGrid>
+        <MudItem xs="12" sm="12" md="12">
+            <MudPaper MinHeight="200px" Class="align-center justify-center mud-width-full py-8 p-3">
+                <MudGrid>
+                    <MudItem xs="12" sm="12" md="6" Class="p-3">
+                        <MudAutocomplete T="string" Label="Players" Value="value1" ValueChanged="(value1) => TestChange(value1)" SearchFunc="@Search1" Variant="Variant.Outlined" ShowProgressIndicator="true" ProgressIndicatorColor="SelectedColor" />
+                        <MudAutocomplete T="string" Label="Clubs" @bind-Value="value2" SearchFunc="@Search2" Variant="Variant.Outlined" ShowProgressIndicator="true" ProgressIndicatorColor="SelectedColor" />
+                        <MudButton Class="mt-2" FullWidth Variant="Variant.Filled" Color="Color.Primary" OnClick="PredictTransfer">Predict</MudButton>
+                    </MudItem>
+                    <MudItem xs="12" sm="12" md="6" Class="p-3 text-center">
+                        <MudText Typo="Typo.h6" GutterBottom="true">Prediction Results</MudText>
+                        <MudFab Color="Color.Primary" Style="width: 10%; height: 40%; font-size: 16px; border-radius:50%" Class="text-center" Label="@predictionValue.ToString()"></MudFab>
+                    </MudItem>
+                </MudGrid>
+           
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="12" md="12">
+            <MudPaper MinHeight="525px" Class="align-center justify-center mud-width-full py-8 p-3">
+                @if (showValuesChart)
+                {
+                    <TransferBase.Components.ValueChangesChart playerId="@playerId" playerName="@value1"></TransferBase.Components.ValueChangesChart>
+                }
+                else
+                {
+                    <MudSkeleton />
+                    <MudSkeleton />
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Animation="Animation.Wave" Height="350px" />
+                    <MudSkeleton />
+                    <MudSkeleton />
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="12" md="6">
+            <MudPaper MinHeight="525px" Class="align-center justify-center mud-width-full py-8">
+                @if (showInformation)
+                {
+                    <TransferBase.Components.PlayerInformation playerId="@playerId"></TransferBase.Components.PlayerInformation>
+                }
+                else
+                {
+                    <div class="info-container">
+                        <div class="half-info" style="margin-left:7%;">
+                            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Animation="Animation.Wave" Height="450px" Width="270px" />
+                        </div>
+                        <div style="margin-left: 5%">
+                            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Animation="Animation.Wave" Height="450px" Width="270px" />
+                        </div>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="12" md="6">
+            <MudPaper MinHeight="525px" Class="align-center justify-center mud-width-full py-8 p-3">
+                @if (showStatistics)
+                {
+                    <TransferBase.Components.PlayerStatistics playerId="@playerId"></TransferBase.Components.PlayerStatistics>
+                }
+                else
+                {
+                    for (int i=0; i < 14; i++)
+                    {
+                        Random r = new Random();
+                        int randomWidth = r.Next(1, 11);
+                        string width = 600 * (randomWidth*0.10) + "px";
+                        if (i % 2 == 0)
+                        {
+                            <MudSkeleton Animation="Animation.Wave" Height="30px" Width="@width" />
+                        }
+                        else
+                        {
+                            <MudSkeleton Animation="Animation.False" Height="35px" Width="@width" />
+                        }
+
+                    }
+
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="12" md="6">
+            <MudPaper MinHeight="250px" Class="align-center justify-center mud-width-full py-8 p-3">
+                @if (showPositiveSkills)
+                {
+                    <TransferBase.Components.PositiveCharacteristics playerId="@playerId"></TransferBase.Components.PositiveCharacteristics>
+                }
+                else
+                {
+                    for (int i = 0; i < 5; i++)
+                    {
+                        <MudSkeleton Animation="Animation.Wave" Height="35px" Width="600px" />
+                    }
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="12" md="6">
+            <MudPaper MinHeight="250px" Class="align-center justify-center mud-width-full py-8 p-3">
+                @if (showNegativeSkills)
+                {
+                    <TransferBase.Components.NegativeCharacteristics playerId="@playerId"></TransferBase.Components.NegativeCharacteristics>
+                }
+                else
+                {
+                    for (int i = 0; i < 5; i++)
+                    {
+                        <MudSkeleton Animation="Animation.Wave" Height="35px" Width="600px" />
+                    }
+                }
+            </MudPaper>
+        </MudItem>
+       
+    </MudGrid>
+    <TransferBase.Components.AlertMessage @ref="_alertMessage" />
+
+</section>
+
+
+
+<style>
+    .info-container {
+        width: 525px;
+        display: flex;
+    }
+
+    .half-info {
+        width: 50%;
+        box-sizing: border-box;
+    }
+</style>

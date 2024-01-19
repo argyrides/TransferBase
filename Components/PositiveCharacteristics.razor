@@ -1,0 +1,77 @@
+﻿@using TransferBase.Application.CustomModels;
+@using TransferBase.Application.Services.General;
+<MudText Typo="Typo.h6" GutterBottom="true">Best Skills</MudText>
+<MudList Clickable="@Clickable" Dense="@Dense" DisableGutters="@Gutters">
+    @if (bestSkills != null)
+    {
+        @foreach (var item in bestSkills!)
+        {
+            <div class="d-flex">
+                <MudListItem Text="@item.Key" />
+                <MudProgressLinear Color="Color.Success" Size="Size.Large" Value="@item.Value" Max="20" Min="0" Class="my-7">
+                    <MudText Typo="Typo.subtitle1" Color="Color.Dark">
+                        <b>@item.Value</b>
+                    </MudText>
+                </MudProgressLinear>
+@*                <MudChip Variant="Variant.Filled" Color="Color.Primary">@item.Value</MudChip>
+*@            </div>
+        }
+
+    }
+    else
+    {
+        <h4>No data found</h4>
+    }
+</MudList>
+
+@code {
+
+    [Parameter]
+    public int playerId { get; set; }
+
+    [Inject]
+    public PlayerSkillsService PlayerSkillsService { get; set; } = default!;
+    [Inject]
+    public PlayersService PlayersService { get; set; } = default!;
+
+    public bool Dense { get; set; }
+    public bool Clickable { get; set; }
+    public bool Gutters { get; set; }
+    IDictionary<string, int>? bestSkills { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (playerId == -1)
+            return;
+
+        Player player = PlayersService.GetPlayerById(playerId);
+
+        if (player != null)
+        {
+            int uid = player.UID;
+            PlayerSkillMod playerSkill = PlayerSkillsService!.GetPlayerSkills(uid)!;
+
+            if (playerSkill != null)
+            {
+                bestSkills = GetTopNSkills(playerSkill, 5);
+            }
+        }
+    }
+
+    private IDictionary<string, int> GetTopNSkills(PlayerSkillMod playerSkill, int n)
+    {
+        var propertyValues = playerSkill.GetType()
+            .GetProperties()
+            .Where(prop => prop.PropertyType == typeof(int))
+            .Select(prop => new
+            {
+                Name = prop.Name,
+                Value = (int)prop.GetValue(playerSkill)
+            })
+            .OrderByDescending(x => x.Value)
+            .Take(n)
+            .ToDictionary(x => x.Name, x => x.Value);
+
+        return propertyValues;
+    }
+}

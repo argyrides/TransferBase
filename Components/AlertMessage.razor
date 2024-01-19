@@ -1,0 +1,11 @@
+﻿@inject ISnackbar Snackbar
+
+@code {
+
+    public void ShowAlert(string message, Severity severity)
+    {
+        Snackbar.Configuration.PositionClass = Defaults.Classes.Position.BottomEnd;
+        Snackbar.Add(message, severity);
+    }
+
+}

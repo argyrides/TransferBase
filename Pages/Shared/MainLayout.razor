@@ -1,0 +1,21 @@
+﻿@inherits LayoutComponentBase
+
+<PageTitle>@AppName</PageTitle>
+<MudThemeProvider />
+<MudSnackbarProvider />
+<MudDialogProvider />
+
+<CascadingValue Value="this">
+    <MudLayout >
+        <NavMenu />
+        <MudMainContent>
+            @Body
+        </MudMainContent>
+    </MudLayout>
+</CascadingValue>
+@*<CascadingValue Value="this">
+    <NavMenu />
+    <main>
+        @Body
+    </main>
+</CascadingValue>*@
